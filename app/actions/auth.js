@@ -9,6 +9,19 @@ import { getCurrentUserRecord } from "@/lib/server/dal";
 import { str, normalizeEmail, isEmail, passwordProblem, rateLimit, clientIp } from "@/lib/server/validate";
 import bcrypt from "bcryptjs";
 
+const SESSION_ERROR = "Sign-in is not available: the server's AUTH_SECRET is missing or shorter than 32 characters. Please contact the site owner.";
+
+/** Creates the session cookie; returns an error message instead of crashing on a misconfigured server. */
+async function startSession(user) {
+  try {
+    await createSession(user);
+    return null;
+  } catch (err) {
+    console.error("Could not create a session", err?.message);
+    return SESSION_ERROR;
+  }
+}
+
 const NO_DB = { message: "Accounts are not available yet: the database is not configured. Please contact the site owner." };
 
 /** Only allow redirects to paths on this site. */
@@ -52,7 +65,8 @@ export async function signup(prev, formData) {
     console.error("Signup failed", err);
     return { values, message: "We couldn't create your account right now. Please try again." };
   }
-  await createSession(user);
+  const sessionError = await startSession(user);
+  if (sessionError) return { values, message: sessionError };
   redirect(safeNext(formData.get("next"), "/dashboard"));
 }
 
@@ -80,8 +94,9 @@ export async function login(prev, formData) {
   if (user.disabled) return { values, message: "This account has been suspended. Please contact support." };
   if (admin && user.role !== "admin") return { values, message: "This account doesn't have admin access." };
 
-  await recordLogin(user._id);
-  await createSession(user);
+  const sessionError = await startSession(user);
+  if (sessionError) return { values, message: sessionError };
+  await recordLogin(user._id).catch(() => {});
   redirect(user.role === "admin" && admin ? "/admin" : safeNext(formData.get("next"), user.role === "admin" ? "/admin" : "/dashboard"));
 }
 
