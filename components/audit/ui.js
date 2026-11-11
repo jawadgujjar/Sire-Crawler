@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { CircleAlert, TriangleAlert, Info, ChevronDown, Check } from "lucide-react";
+export { formatMoney, formatDay } from "@/lib/format";
 
 // ─── Formatting ───────────────────────────────────────────────────────────────
 
@@ -161,14 +162,17 @@ export function Segmented({ value, onChange, options, className = "" }) {
           type="button"
           role="radio"
           aria-checked={value === o.value}
-          onClick={() => onChange(o.value)}
+          aria-disabled={o.disabled || undefined}
+          title={o.title}
+          onClick={() => (o.disabled ? o.onDisabledClick?.() : onChange(o.value))}
           className={cx(
             "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-all",
-            value === o.value ? "bg-white text-ink shadow-sm" : "text-mute hover:text-ink"
+            value === o.value ? "bg-white text-ink shadow-sm" : o.disabled ? "cursor-not-allowed text-faint" : "text-mute hover:text-ink"
           )}
         >
           {o.icon}
           {o.label}
+          {o.badge && <span className="rounded bg-gradient-to-r from-brand to-navy-2 px-1 py-px text-[9px] font-bold uppercase tracking-wider text-white">{o.badge}</span>}
           {o.count !== undefined && (
             <span className={cx("rounded-full px-1.5 text-[10px] tabular-nums", value === o.value ? "bg-brand-50 text-brand" : "bg-white/70 text-mute")}>{fmt(o.count)}</span>
           )}

@@ -3,12 +3,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   Download, RotateCw, Plus, LayoutDashboard, ListChecks, Files, ChartColumn, TrendingUp,
-  FileSpreadsheet, FileJson, Printer, Globe, Clock, Info, ChevronRight, ExternalLink,
+  FileSpreadsheet, FileJson, Printer, Globe, Clock, Info, ChevronRight, ExternalLink, Headset, ArrowRight, ArrowLeft,
 } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import SiteNav from "./site/SiteNav";
+import SiteFooter from "./site/SiteFooter";
 import { coerceStartUrl, displayUrl } from "@/lib/audit/url";
 import { CHECK_BY_ID, CATEGORIES } from "@/lib/audit/checks";
 import { useCrawl } from "./audit/useCrawl";
-import { subscribeHistory, getHistorySnapshot, getServerHistorySnapshot, saveToHistory, removeFromHistory, previousFor } from "./audit/history";
+import { subscribeHistory, getHistorySnapshot, getServerHistorySnapshot, saveToHistory, removeFromHistory, previousFor, summarize } from "./audit/history";
 import { exportPagesCsv, exportIssuesCsv, exportJson } from "./audit/exporters";
 import Landing, { DEFAULT_OPTIONS } from "./audit/Landing";
 import CrawlProgress from "./audit/CrawlProgress";
@@ -93,7 +97,7 @@ const REPORT_TABS = [
   { value: "progress", label: "Progress", Icon: TrendingUp, title: "Progress", subtitle: "How this site has changed between audits" },
 ];
 
-function SiteFooter({ className = "" }) {
+function ReportFooter({ className = "" }) {
   return (
     <footer className={cx("border-t border-line bg-white print:hidden", className)}>
       <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-3 px-4 py-7 text-xs text-mute sm:flex-row sm:px-6">
@@ -104,7 +108,7 @@ function SiteFooter({ className = "" }) {
   );
 }
 
-function ReportView({ report, history, onRerun, onNew }) {
+function ReportView({ report, history, onRerun, onNew, onHome }) {
   const [tab, setTab] = useState("overview");
   const [filters, setFilters] = useState({ issues: {}, pages: {} });
   const [drawerUrl, setDrawerUrl] = useState(null);
@@ -146,7 +150,7 @@ function ReportView({ report, history, onRerun, onNew }) {
         <aside className="sticky top-0 hidden h-screen w-[268px] shrink-0 flex-col overflow-y-auto bg-navy text-white lg:flex">
           <div className="pointer-events-none absolute inset-x-0 top-0 h-72 bg-[radial-gradient(ellipse_at_top_left,rgb(59_111_240/0.35),transparent_70%)]" />
           <div className="relative flex h-16 shrink-0 items-center px-5">
-            <button onClick={onNew} className="rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40" aria-label="Sire Crawler home">
+            <button onClick={onHome} className="rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40" aria-label="Sire Crawler home">
               <Logo light />
             </button>
           </div>
@@ -194,6 +198,12 @@ function ReportView({ report, history, onRerun, onNew }) {
           </nav>
 
           <div className="relative mt-auto space-y-2 p-4">
+            <Link href={`/contact?service=Technical%20SEO&website=${encodeURIComponent(report.rootHost)}`} className="sheen relative mb-3 block overflow-hidden rounded-2xl bg-gradient-to-br from-brand to-navy-2 p-4 ring-1 ring-inset ring-white/15 transition-transform hover:-translate-y-0.5">
+              <Headset size={18} className="text-[#b9d3fb]" />
+              <div className="mt-2 text-sm font-bold">Need help fixing these?</div>
+              <p className="mt-0.5 text-xs leading-relaxed text-[#c5d2ec]">Our SEO team can fix every issue for you.</p>
+              <span className="mt-2 inline-flex items-center gap-1 text-xs font-bold text-white">Get a free quote <ArrowRight size={12} /></span>
+            </Link>
             <Button variant="light" className="w-full" onClick={onRerun}><RotateCw size={15} /> Re-run audit</Button>
             <Button className="w-full" onClick={onNew}><Plus size={16} /> New audit</Button>
             <p className="pt-2 text-center text-[11px] text-[#8fa3cf]">{fmt(fetched)} pages · {formatDuration(report.durationMs)}</p>
@@ -205,7 +215,7 @@ function ReportView({ report, history, onRerun, onNew }) {
           <header className="sticky top-0 z-30 border-b border-line bg-white/85 backdrop-blur-xl">
             <div className="flex h-16 items-center justify-between gap-3 px-4 sm:px-8">
               <div className="flex min-w-0 items-center gap-3">
-                <button onClick={onNew} className="lg:hidden" aria-label="Sire Crawler home"><Logo compact /></button>
+                <button onClick={onHome} className="lg:hidden" aria-label="Sire Crawler home"><Logo compact /></button>
                 <nav className="hidden min-w-0 items-center gap-1.5 text-sm text-mute sm:flex" aria-label="Breadcrumb">
                   <span>Site Audit</span>
                   <ChevronRight size={14} className="shrink-0 text-faint" />
@@ -261,9 +271,34 @@ function ReportView({ report, history, onRerun, onNew }) {
               {tab === "stats" && <StatsView report={report} />}
               {tab === "progress" && <HistoryView report={report} history={history} />}
             </div>
+
+            {(tab === "overview" || tab === "issues") && (
+              <div className="sheen relative mt-8 overflow-hidden rounded-3xl bg-navy px-6 py-8 text-white shadow-lift sm:px-10">
+                <div className="hero-grid absolute inset-0 opacity-60" />
+                <div className="pointer-events-none absolute -right-16 -top-24 h-72 w-72 rounded-full bg-brand/60 blur-[90px]" />
+                <div className="relative flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <div className="text-xs font-bold uppercase tracking-[0.18em] text-[#9ec5f4]">Done-for-you SEO</div>
+                    <h3 className="mt-1.5 text-2xl font-extrabold tracking-tight">
+                      {report.counts.error + report.counts.warning > 0 ? `${fmt(report.counts.error + report.counts.warning)} issues to fix — ` : ""}
+                      <span className="font-display font-normal italic text-[#b9d3fb]">let our experts handle it</span>
+                    </h3>
+                    <p className="mt-1 text-sm text-[#b7c6e6]">Technical SEO, website audits, Google Ads, social media and web design.</p>
+                  </div>
+                  <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+                    <Link href={`/contact?service=Technical%20SEO&website=${encodeURIComponent(report.rootHost)}`} className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-white px-5 text-sm font-semibold text-navy transition-colors hover:bg-brand-50">
+                      Get a free quote <ArrowRight size={16} />
+                    </Link>
+                    <Link href="/contact" className="inline-flex h-11 items-center justify-center rounded-xl px-5 text-sm font-semibold text-white ring-1 ring-inset ring-white/25 transition-colors hover:bg-white/10">
+                      Contact us
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            )}
           </main>
 
-          <SiteFooter />
+          <ReportFooter />
         </div>
 
         {drawerUrl && <PageDrawer key={drawerUrl} report={report} url={drawerUrl} onClose={closeDrawer} onOpenPage={setDrawerUrl} />}
@@ -273,7 +308,12 @@ function ReportView({ report, history, onRerun, onNew }) {
   );
 }
 
-export default function SireCrawler() {
+/**
+ * The audit app. On the marketing home page it shows the full landing; inside
+ * the dashboard (`embedded`) it shows a compact start screen.
+ */
+export default function SireCrawler({ user = null, proPrice = null, embedded = false }) {
+  const router = useRouter();
   const crawl = useCrawl();
   const [options, setOptions] = useState(DEFAULT_OPTIONS);
   const [lastUrl, setLastUrl] = useState("");
@@ -284,8 +324,14 @@ export default function SireCrawler() {
     if (crawl.report && savedRef.current !== crawl.report) {
       savedRef.current = crawl.report;
       saveToHistory(crawl.report);
+      // Signed-in users also keep the summary in their dashboard
+      if (user) {
+        fetch("/api/audits", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(summarize(crawl.report)) })
+          .then(() => router.refresh())
+          .catch(() => {});
+      }
     }
-  }, [crawl.report]);
+  }, [crawl.report, user, router]);
 
   useEffect(() => {
     if (crawl.status !== "idle") window.scrollTo({ top: 0, behavior: "smooth" });
@@ -298,49 +344,44 @@ export default function SireCrawler() {
         crawl.setError(input?.trim() ? "That doesn't look like a valid website address. Try something like example.com or https://www.example.com" : "Please enter a website address to audit.");
         return;
       }
+      const next = { ...options, ...overrides };
+      const maxPages = user?.maxPages ?? 100;
+      if (next.maxPages > maxPages) next.maxPages = maxPages;
       setLastUrl(url);
-      crawl.start(url, { ...options, ...overrides });
+      crawl.start(url, next);
     },
-    [crawl, options]
+    [crawl, options, user]
   );
 
+  const goHome = useCallback(() => (embedded ? router.push("/dashboard") : crawl.reset()), [embedded, router, crawl]);
   const showLanding = crawl.status === "idle" || crawl.status === "error";
   const showReport = crawl.status === "done" && crawl.report;
 
   if (showReport) {
     return (
       <div className="min-h-screen bg-canvas">
-        <ReportView report={crawl.report} history={history} onRerun={() => start(crawl.report.startUrl, crawl.report.options)} onNew={crawl.reset} />
+        <ReportView report={crawl.report} history={history} onRerun={() => start(crawl.report.startUrl, crawl.report.options)} onNew={crawl.reset} onHome={goHome} />
       </div>
     );
   }
 
   return (
     <div className="flex min-h-screen flex-col bg-canvas">
-      <nav className={cx("sticky top-0 z-40 border-b backdrop-blur-xl print:hidden", showLanding ? "border-white/10 bg-navy/90" : "border-line bg-white/85")}>
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
-          <button onClick={crawl.reset} className="rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40" aria-label="Sire Crawler home">
-            <Logo light={showLanding} />
-          </button>
-          {showLanding ? (
-            <>
-              <div className="hidden items-center gap-1 text-sm font-medium text-[#c5d2ec] md:flex">
-                {[["#how", "How it works"], ["#features", "Checks"], ["#formats", "Reports"]].map(([href, label]) => (
-                  <a key={href} href={href} className="rounded-lg px-3 py-1.5 transition-colors hover:bg-white/[0.07] hover:text-white">{label}</a>
-                ))}
-              </div>
-              <a
-                href="#audit"
-                className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-white px-4 text-sm font-semibold text-navy shadow-[0_8px_24px_-10px_rgb(0_0_0/0.6)] transition-colors hover:bg-brand-50"
-              >
-                Start free audit
-              </a>
-            </>
-          ) : (
-            <span className="text-xs font-medium text-mute">Technical SEO auditing</span>
-          )}
-        </div>
-      </nav>
+      {embedded ? (
+        <nav className={cx("sticky top-0 z-40 border-b backdrop-blur-xl", showLanding ? "border-white/10 bg-navy/90" : "border-line bg-white/85")}>
+          <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
+            <Link href="/dashboard" aria-label="Dashboard"><Logo light={showLanding} /></Link>
+            <Link
+              href="/dashboard"
+              className={cx("inline-flex h-9 items-center gap-2 rounded-xl px-3.5 text-sm font-semibold transition-colors", showLanding ? "text-white ring-1 ring-inset ring-white/20 hover:bg-white/10" : "text-ink ring-1 ring-inset ring-line hover:bg-canvas")}
+            >
+              <ArrowLeft size={15} /> Dashboard
+            </Link>
+          </div>
+        </nav>
+      ) : (
+        <SiteNav user={user} tone={showLanding ? "dark" : "light"} onHome={crawl.status === "running" ? undefined : crawl.reset} />
+      )}
 
       <div className="flex-1">
         {showLanding && (
@@ -350,6 +391,9 @@ export default function SireCrawler() {
             history={history}
             options={options}
             setOptions={setOptions}
+            user={user}
+            proPrice={proPrice}
+            compact={embedded}
             onOpenHistory={(h) => start(h.startUrl, h.options?.maxPages ? { maxPages: h.options.maxPages } : undefined)}
             onRemoveHistory={removeFromHistory}
           />
@@ -358,7 +402,7 @@ export default function SireCrawler() {
         {crawl.status === "running" && <CrawlProgress url={lastUrl} progress={crawl.progress} onStop={crawl.stop} />}
       </div>
 
-      <SiteFooter className={showLanding ? "" : "mt-12"} />
+      {embedded ? null : showLanding ? <SiteFooter /> : <ReportFooter className="mt-12" />}
     </div>
   );
 }
