@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { runCrawl, sanitizeOptions } from "@/lib/crawler/crawl";
 import { assertResolvablePublicHost } from "@/lib/crawler/net";
 import { coerceStartUrl } from "@/lib/audit/url";
+import { getCurrentUserRecord } from "@/lib/server/dal";
+import { planFor } from "@/lib/plans";
 
 // Long crawls stream progress; the crawl itself stops ~20s before this limit
 // so the report always arrives before the platform cuts the request off.
@@ -49,7 +51,14 @@ export async function POST(req) {
     else activeByClient.set(key, n);
   };
 
+  // Plan limits are enforced here, not just in the UI
+  const plan = planFor(await getCurrentUserRecord());
   const options = sanitizeOptions(body?.options);
+  if (options.maxPages > plan.maxPages) {
+    release();
+    return NextResponse.json({ error: `Your ${plan.name} plan audits up to ${plan.maxPages} pages. Upgrade to Pro to crawl up to 1,000 pages.`, upgrade: true }, { status: 403 });
+  }
+  if (!plan.speeds.includes(options.speed)) options.speed = "normal";
   const abort = new AbortController();
   req.signal?.addEventListener("abort", () => abort.abort());
   const encoder = new TextEncoder();

@@ -1,36 +1,74 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Sire Crawler
 
-## Getting Started
+Technical SEO site audits with user accounts, Pro subscriptions (Stripe), a client dashboard, a quote / contact funnel and an admin portal.
 
-First, run the development server:
+- **Free:** site audits up to 100 pages, 58 checks, health score, exports, saved audit history
+- **Pro (Stripe subscription):** audits up to 1,000 pages, fast crawl mode and the Pro data tools
+- **Admin portal:** users, subscriptions, payments, revenue and quote requests
+
+Built with Next.js 16 (App Router), React 19, Tailwind CSS 4 and MongoDB.
+
+## Setup
 
 ```bash
+npm install
+cp .env.example .env.local   # then fill in the values
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open http://localhost:3000.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Environment variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Variable | Required | Purpose |
+| --- | --- | --- |
+| `MONGODB_URI` | Yes | MongoDB connection string (e.g. a free MongoDB Atlas cluster) |
+| `MONGODB_DB` | No | Database name, default `sire_crawler` |
+| `AUTH_SECRET` | Yes in production | Signs session cookies. `openssl rand -base64 48` |
+| `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Yes | The first admin account. It is created on the first sign-in at `/admin/login` |
+| `APP_URL` | Recommended | Public site URL, used for Stripe return links |
+| `STRIPE_SECRET_KEY` | For payments | Stripe secret key |
+| `STRIPE_PRICE_ID` | For payments | The recurring price of the Pro plan |
+| `STRIPE_WEBHOOK_SECRET` | For payments | Webhook signing secret |
 
-## Learn More
+Without the Stripe variables the site still works; the upgrade button is replaced by a "contact us" message.
 
-To learn more about Next.js, take a look at the following resources:
+### Stripe
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. In Stripe, create a product **Pro** with a recurring price and copy its price ID into `STRIPE_PRICE_ID`.
+2. Enable the **Customer portal** (Settings → Billing → Customer portal) so users can update cards and cancel.
+3. Add a webhook endpoint `https://YOUR-DOMAIN/api/stripe/webhook` with these events:
+   `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`,
+   `customer.subscription.deleted`, `invoice.paid`, `invoice.payment_failed`.
+4. Local testing: `stripe listen --forward-to localhost:3000/api/stripe/webhook` and use the printed `whsec_…` secret.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Routes
 
-## Deploy on Vercel
+| Route | Who | What |
+| --- | --- | --- |
+| `/` | Everyone | Landing page and free site audit |
+| `/contact` | Everyone | Quote / contact form |
+| `/login`, `/signup` | Visitors | Accounts |
+| `/dashboard` | Users | Overview, saved audits, plan |
+| `/dashboard/audit` | Users | Run an audit (plan limits apply) |
+| `/dashboard/tools` | Users | Pro data tools |
+| `/dashboard/services` | Users | Request a quote, track requests |
+| `/dashboard/billing` | Users | Upgrade, manage subscription, invoices |
+| `/dashboard/settings` | Users | Profile and password |
+| `/admin/login` | Admins | Admin sign in |
+| `/admin` | Admins | Users, revenue, MRR, signups, latest leads |
+| `/admin/users` | Admins | Search users, suspend / reactivate |
+| `/admin/subscriptions` | Admins | Subscribers, amounts, last and next payment, total paid, payments |
+| `/admin/quotes` | Admins | Quote requests, status pipeline, internal notes |
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Security notes
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Passwords are hashed with bcrypt; sessions are signed JWTs in an HttpOnly, SameSite=Lax cookie.
+- Changing a password or suspending a user signs that user out everywhere.
+- Login, signup and quote forms are rate limited (per server instance) and use a honeypot field.
+- Plan limits are enforced in the crawl API, not only in the UI.
+- The crawler blocks private and internal network addresses (SSRF protection).
+
+## Deploying
+
+Any Node.js host works (Vercel, Railway, a VPS). Set the environment variables, point the Stripe webhook at the deployed URL, then sign in at `/admin/login` with `ADMIN_EMAIL` / `ADMIN_PASSWORD` to create the admin account. The crawl API runs up to 300 seconds (`maxDuration`).

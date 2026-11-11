@@ -106,6 +106,12 @@ body {
 }
 .animate-slide-in { animation: slide-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both; }
 
+@keyframes slide-in-left {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+.animate-slide-in-left { animation: slide-in-left 0.26s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }
